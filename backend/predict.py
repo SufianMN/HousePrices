@@ -1,33 +1,36 @@
-# File: backend/predict.py
-
 import sys
 import joblib
 import pandas as pd
 import json
+import warnings
 
 # Suppress the FutureWarning from pandas for a cleaner output
-import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def predict():
     """
-    Loads the trained model and makes a price prediction.
+    Loads a country-specific model and makes a price prediction.
     This version only prints the final prediction number.
     """
+    # Expects two arguments: country and the JSON data string
+    if len(sys.argv) < 3:
+        print("Error: Country or input data not provided.", file=sys.stderr)
+        sys.exit(1)
+
+    country = sys.argv[1]
+    input_data_json = sys.argv[2]
+
+    # Dynamically build the path to the correct model files based on the country
+    model_path = f'./models/{country}/xgb_house_price_model.pkl'
+    columns_path = f'./models/{country}/model_columns.pkl'
+
     try:
-        model = joblib.load('./models/xgb_house_price_model.pkl')
-        model_columns = joblib.load('./models/model_columns.pkl')
+        model = joblib.load(model_path)
+        model_columns = joblib.load(columns_path)
     except FileNotFoundError:
-        # Send a clean error message to the server if files are missing
-        print("Error: Model files not found.", file=sys.stderr)
+        print(f"Error: Model files for country '{country}' not found.", file=sys.stderr)
         sys.exit(1)
 
-    if len(sys.argv) < 2:
-        print("Error: No input data provided.", file=sys.stderr)
-        sys.exit(1)
-
-    input_data_json = sys.argv[1]
-    
     try:
         input_data = json.loads(input_data_json)
     except json.JSONDecodeError:
@@ -36,7 +39,7 @@ def predict():
 
     input_df = pd.DataFrame([input_data])
 
-    # Align columns with the training data
+    # Align columns with the training data for the specific country model
     full_input_df = pd.DataFrame(columns=model_columns)
     full_input_df = pd.concat([full_input_df, input_df], ignore_index=True, sort=False).fillna(0)
     full_input_df = full_input_df[model_columns]
@@ -45,12 +48,10 @@ def predict():
     try:
         prediction = model.predict(full_input_df)
         # --- THE ONLY OUTPUT ---
-        # This is the only line that prints to standard output.
         print(prediction[0])
     except Exception as e:
         print(f"Error during prediction: {str(e)}", file=sys.stderr)
         sys.exit(1)
-
 
 if __name__ == '__main__':
     predict()
